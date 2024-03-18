@@ -37,6 +37,7 @@ void reset(int* array, size_t length){
 
     ensures *rest == \old(*rest) % values[n] ;
     ensures \old(*rest) == (\result * values[n]) + *rest ; 
+    ensures *rest >= 0; 
 
     behavior remainder: 
         assumes *rest % values[n] >= 0 && *rest >= values[n] ;
@@ -51,7 +52,7 @@ void reset(int* array, size_t length){
     disjoint behaviors; 
     complete behaviors; 
 */
-int remove_max_notes(enum note n, int* rest) {
+int remove_max_notes(size_t n, int* rest) {
   int old_rest = *rest; 
   *rest = *rest % values[n]; 
   return (old_rest - *rest) / values[n] ; 
@@ -60,16 +61,30 @@ int remove_max_notes(enum note n, int* rest) {
 /*@ requires valid_ptr: \valid(change + (0 .. 8));
     requires 0 < amount < INT_MAX; 
     requires 0 < received < INT_MAX;
+    requires vals_decrease: \forall size_t j, i; 0 <= j < i < 9
+            ==> values[j] > values[i];   
 
     assigns change[0 .. 8];     
 
     behavior overpaid: 
         assumes amount <= received ; 
         ensures \result == 0 ; 
+        ensures correct_change: 
+            received - amount ==
+                change[N500] * values[N500] +
+                change[N200] * values[N200] +
+                change[N100] * values[N100] +
+                change[N50]  * values[N50] +
+                change[N20]  * values[N20] +
+                change[N10]  * values[N10] + 
+                change[N5]   * values[N5] +
+                change[N2]   * values[N2] +
+                change[N1]   * values[N1]; 
 
     behavior underpaid: 
         assumes amount > received ; 
         ensures \result == -1 ;  
+        ensures \forall size_t i; 0 <= i < 9 ==> change[i] == 0 ; 
 
     disjoint behaviors; 
     complete behaviors; 
@@ -83,12 +98,23 @@ int make_change(size_t amount, size_t received, int* change){
     /*@
         loop invariant 0 <= i <= 9 ;
         loop invariant 0 <= rest <= \at(rest, LoopEntry) <= INT_MAX ; 
+
+        loop invariant rest         
+
+        loop invariant max_bills: \forall size_t j; 0 <= j < i 
+            ==> values[j] > change[i] * values[i]; 
+
+        loop invariant val_calcd: change[i] == (\at(rest, LoopCurrent) - rest) / values[i] ; 
+        loop invariant val_tbd: \forall size_t j; i <= j < length
+            ==> change[j] == 0; 
+            
         loop assigns i, rest, change[0 .. length-1] ;
-        loop variant length - i ;
+        loop variant length - i;
     */
     for (size_t i = 0; i < length; i++){ 
-        //@ assert i < 9; 
         change[i] = remove_max_notes(i, &rest);
+        //@ assert i < 9; 
+        //@ assert rest >= 0; 
     }
     
     // assert rest == 0; 
@@ -97,7 +123,6 @@ int make_change(size_t amount, size_t received, int* change){
 
 /*
 
-loop invariant rest == \at(rest, LoopCurrent) - (values[i] * change[i]) - \at(rest, LoopCurrent) % values[i]; 
 
 ensures \forall size_t i; 0 <= i < length ==> change[i] == 0; 
 loop invariant each_iter: \at(rest, LoopCurrent) > values[i] 
